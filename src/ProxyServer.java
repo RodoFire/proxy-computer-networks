@@ -293,18 +293,87 @@ public class ProxyServer {
             byte[] buf = new byte[8192];
             int r;
             try {
-                ByteArrayOutputStream tempBuffer = new ByteArrayOutputStream();
-                while ((r = in.read(buf)) != -1) {
-                    tempBuffer.write(buf, 0, r);
+                // Read the initial bytes to determine content type
+                r = in.read(buf);
+                if (r == -1) {
+                    System.err.println("No data received from the server.");
+                    return; // EOF
                 }
-                // Convert the response to a string for modification
-                String response = tempBuffer.toString(StandardCharsets.UTF_8);
-                // Replace occurrences of 'Stockholm' with 'Linköping' and 'Smiley' with 'Trolly'
-                response = response.replace("Stockholm", "Linköping").replace("Smiley", "Trolly");
-                // Write the modified response back to the output stream
-                out.write(response.getBytes(StandardCharsets.UTF_8));
-                out.flush();
-            } catch (IOException ignored) {
+
+                // Check for text-based content types
+                String contentType = null;
+                if (r > 0) {
+                    String responseLine = new String(buf, 0, r, StandardCharsets.UTF_8);
+                    System.out.println("Initial response line: " + responseLine);
+                    if (responseLine.startsWith("HTTP/")) {
+                        // Extract Content-Type from headers
+                        int headerEndIndex = responseLine.indexOf("\r\n\r\n");
+                        if (headerEndIndex != -1) {
+                            String headers = responseLine.substring(0, headerEndIndex);
+                            System.out.println("Headers: " + headers);
+                            for (String header : headers.split("\r\n")) {
+                                if (header.toLowerCase().startsWith("content-type:")) {
+                                    contentType = header.substring(13).trim();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Debugging logs
+                System.out.println("Content-Type detected: " + contentType);
+
+                // If content type is text/html, modify the response
+                if (contentType != null && contentType.contains("text/html")) {
+                    ByteArrayOutputStream tempBuffer = new ByteArrayOutputStream();
+                    tempBuffer.write(buf, 0, r); // Write the initial bytes
+                    while ((r = in.read(buf)) != -1) {
+                        tempBuffer.write(buf, 0, r);
+                    }
+
+                    // Convert the response to a string for modification
+                    String response = tempBuffer.toString(StandardCharsets.UTF_8);
+
+                    // Separate headers and body
+                    int headerEndIndex = response.indexOf("\r\n\r\n");
+                    if (headerEndIndex == -1) {
+                        // If no headers are found, treat the entire response as the body
+                        out.write(response.getBytes(StandardCharsets.UTF_8));
+                        return;
+                    }
+
+                    String headers = response.substring(0, headerEndIndex);
+                    String body = response.substring(headerEndIndex + 4);
+
+                    // Modify the body
+                    body = body.replace("Stockholm", "Linköping");
+                    body = body.replace("Smiley", "Trolly");
+                    body = body.replace("https://zebroid.ida.liu.se/fakenews/smiley.jpg", "https://zebroid.ida.liu.se/fakenews/trolly.jpg");
+                    body = body.replace("./smiley.jpg", "./trolly.jpg");
+
+                    // Update Content-Length header
+                    int newContentLength = body.getBytes(StandardCharsets.UTF_8).length;
+                    if (headers.toLowerCase().contains("content-length:")) {
+                        headers = headers.replaceAll("(?i)(Content-Length:[ \\t\\n\\x0B\\f\\r]*)\\d+", "Content-Length: " + newContentLength);
+                    } else {
+                        headers += "\r\nContent-Length: " + newContentLength;
+                    }
+
+                    // Write the updated headers and body back to the output stream
+                    out.write((headers + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+                    out.write(body.getBytes(StandardCharsets.UTF_8));
+                } else {
+                    // For non-text content, copy the data as-is without modification
+                    out.write(buf, 0, r); // Write the initial bytes
+                    while ((r = in.read(buf)) != -1) {
+                        out.write(buf, 0, r);
+                    }
+                }
+
+                System.out.println("Data successfully forwarded to the client.");
+            } catch (IOException e) {
+                System.err.println("Error during stream copy: " + e.getMessage());
             }
         }
 
