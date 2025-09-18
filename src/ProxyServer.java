@@ -4,9 +4,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
- * Simple educational HTTP/HTTPS proxy.
+ * HTTP proxy.
  *
- * This proxy supports basic HTTP request forwarding and HTTPS tunnelling using
+ * This proxy supports basic HTTP request forwarding using
  * the CONNECT method. It does not implement caching, authentication or
  * filtering. The implementation is intentionally simple to illustrate the
  * high-level behaviour of a proxy.
