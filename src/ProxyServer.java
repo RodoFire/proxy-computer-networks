@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -297,11 +298,11 @@ public class ProxyServer {
                     tempBuffer.write(buf, 0, r);
                 }
                 // Convert the response to a string for modification
-                String response = tempBuffer.toString("UTF-8");
+                String response = tempBuffer.toString(StandardCharsets.UTF_8);
                 // Replace occurrences of 'Stockholm' with 'Linköping' and 'Smiley' with 'Trolly'
                 response = response.replace("Stockholm", "Linköping").replace("Smiley", "Trolly");
                 // Write the modified response back to the output stream
-                out.write(response.getBytes("UTF-8"));
+                out.write(response.getBytes(StandardCharsets.UTF_8));
                 out.flush();
             } catch (IOException ignored) {
             }
