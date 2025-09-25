@@ -2,6 +2,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.regex.*;
 
 /**
  * HTTP proxy.
@@ -346,11 +347,28 @@ public class ProxyServer {
                     String headers = response.substring(0, headerEndIndex);
                     String body = response.substring(headerEndIndex + 4);
 
-                    // Modify the body
+                    // --- Protection: do not modify <img ...src="...Stockholm..." ...> ---
+                    List<String> protectedImgSnippets = new ArrayList<>();
+                    Pattern imgPattern = Pattern.compile("(<img[^>]*src=\"[^\"]*Stockholm[^\"]*\"[^>]*>)", Pattern.CASE_INSENSITIVE);
+                    Matcher imgMatcher = imgPattern.matcher(body);
+                    StringBuffer sb = new StringBuffer();
+                    while (imgMatcher.find()) {
+                        protectedImgSnippets.add(imgMatcher.group(1));
+                        imgMatcher.appendReplacement(sb, "__PROTECTED_IMG_" + (protectedImgSnippets.size() - 1) + "__");
+                    }
+                    imgMatcher.appendTail(sb);
+                    body = sb.toString();
+
+                    // Modify the body (except protected <img> tags)
                     body = body.replace("Stockholm", "Linköping");
                     body = body.replace("Smiley", "Trolly");
                     body = body.replace("https://zebroid.ida.liu.se/fakenews/smiley.jpg", "https://zebroid.ida.liu.se/fakenews/trolly.jpg");
                     body = body.replace("./smiley.jpg", "./trolly.jpg");
+
+                    // Restore protected <img> tags
+                    for (int i = 0; i < protectedImgSnippets.size(); i++) {
+                        body = body.replace("__PROTECTED_IMG_" + i + "__", protectedImgSnippets.get(i));
+                    }
 
                     // Update Content-Length header
                     int newContentLength = body.getBytes(StandardCharsets.UTF_8).length;
