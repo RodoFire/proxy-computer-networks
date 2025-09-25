@@ -29,7 +29,9 @@ public class ServerSideProxy extends Thread {
 
     private void listen() throws IOException {
         while (!ServerSideProxy.stop) {
+            System.out.println("Waiting for client connection...");
             Socket clientSocket = this.serverSocket.accept();
+            System.out.println("accepted client");
             ClientSideProxy clientSideProxy = new ClientSideProxy(clientSocket);
             clientSideProxies.add(clientSideProxy);
             clientSideProxy.start();

@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class ClientSideProxy extends Thread {
@@ -31,6 +32,7 @@ public class ClientSideProxy extends Thread {
             if (headers.isEmpty()) {
                 break;
             }
+            headers.forEach(System.out::println);
 
             Socket serverSocket = getSocketFromRequest(headers);
             if (serverSocket == null) {
@@ -40,7 +42,6 @@ public class ClientSideProxy extends Thread {
             sendRequestToServer(serverSocket, headers);
 
             listenFromServer(serverSocket);
-
             serverSocket.close();
         }
     }
@@ -48,10 +49,11 @@ public class ClientSideProxy extends Thread {
     private static List<String> getHeaders(BufferedReader reader) throws IOException {
         List<String> headers = new ArrayList<>();
         String line;
+
         while ((line = reader.readLine()) != null && !line.isEmpty()) {
 
             //HTTPS request, we refuse the connection
-            if (line.startsWith("CONNECT")){
+            if (line.startsWith("CONNECT")) {
                 System.out.println("HTTPS request, we refuse the connection");
                 return new ArrayList<>();
             }
@@ -59,6 +61,48 @@ public class ClientSideProxy extends Thread {
             System.out.println(line);
         }
         return headers;
+    }
+
+    int contentLength(List<String> headers) {
+        for (String header : headers) {
+            Integer length = ContentModifier.getContentLength(header);
+            if (length != null) return length;
+        }
+        return 0;
+    }
+
+    boolean isChunked(List<String> headers) {
+        for (String header : headers) {
+            if (header.startsWith("Transfer-Encoding") && header.contains("chunked")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    byte[] getBody(InputStream in, int contentLength) throws IOException {
+        if (contentLength > 0) {
+            System.out.println("contentLength: " + contentLength);
+            byte[] body = new byte[contentLength];
+            int totalRead = 0;
+
+            while (totalRead < contentLength) {
+                int bytesRead = in.read(body, totalRead, contentLength - totalRead);
+                if (bytesRead == -1) {
+                    System.out.println("Stream ended prematurely at " + totalRead + " bytes");
+                    break;
+                }
+                totalRead += bytesRead;
+            }
+
+            if (totalRead != contentLength) {
+                System.out.println("different body length: got " + totalRead + " instead of " + contentLength);
+                return Arrays.copyOf(body, totalRead);
+            }
+
+            return body;
+        }
+        return null;
     }
 
     private void sendRequestToServer(Socket serverRequestSocket, List<String> requestLines) throws IOException {
@@ -94,7 +138,25 @@ public class ClientSideProxy extends Thread {
                 break;
             }
 
+            int alteredContentLength = ContentModifier.handleText(headers);
+            ContentModifier.modifyContentLength(headers, alteredContentLength);
             sendResponseToClient(headers);
+/*
+            OutputStream clientOut = clientSocket.getOutputStream();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                clientOut.write((line + "\r\n").getBytes());
+            }
+            clientOut.write("\r\n".getBytes());
+            clientOut.flush();
+
+            int contentLength = contentLength(headers);
+            byte[] body = getBody(in, contentLength);
+            if (body != null) {
+                System.out.println("body not null: " + body.length);
+                clientOut.write(body);
+            }
+            clientOut.flush();*/
         }
     }
 
